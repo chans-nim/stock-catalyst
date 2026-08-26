@@ -87,6 +87,31 @@ briefing:
   time: "08:00"
   # 브리핑에 포함할 수집 범위 (시간)
   lookback_hours: 18
+  # 해외 주요 지수의 최근 확정 종가 (Yahoo Finance 심볼)
+  global_market_timeout_sec: 10
+  global_markets:
+    - name: S&P 500
+      symbol: "^GSPC"
+    - name: 나스닥
+      symbol: "^IXIC"
+    - name: 다우
+      symbol: "^DJI"
+    - name: 필라델피아 반도체
+      symbol: "^SOX"
+    - name: 닛케이 225
+      symbol: "^N225"
+    - name: 유로스톡스 50
+      symbol: "^STOXX50E"
+  # 미국 지수 선물 (아침 브리핑 시점의 최신 일봉 값)
+  global_futures:
+    - name: S&P 500 선물
+      symbol: "ES=F"
+    - name: 나스닥 100 선물
+      symbol: "NQ=F"
+    - name: 다우 선물
+      symbol: "YM=F"
+    - name: 러셀 2000 선물
+      symbol: "RTY=F"
 
 # ---- 관심 종목 (브리핑에 시세 포함, 종목코드 6자리) ----
 watchlist:

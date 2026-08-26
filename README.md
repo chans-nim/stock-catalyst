@@ -5,7 +5,7 @@
 - **수집**: DART 전자공시 + 언론사 뉴스 RSS 피드(키워드 필터) 폴링, 한국투자증권(KIS) API 시세
 - **분석**: 온디바이스 AI(Ollama `qwen2.5:3b`)로 요약·중요도, `bge-m3`로 기사 그룹화·섹터 분류 → SQLite 적재 (OpenAI 전환 가능)
 - **실시간 알림**: 중요도 높은 재료를 텔레그램으로 즉시 푸시
-- **아침 브리핑**: 매일 지정 시각에 핵심 재료 + 테마별 동향 + 관심 종목 시세를 텔레그램으로 발송
+- **아침 브리핑**: 매일 지정 시각에 해외 주요 지수·미국 지수 선물 + 핵심 재료 + 테마별 동향 + 관심 종목 시세를 텔레그램으로 발송
 
 ## 설치
 
@@ -67,6 +67,9 @@ python main.py status    # 수집·분석 현황 확인
 - `report.related_limit`: 동일 종목 기전송 연관 기사 최대 표시 수 (기본 3)
 - 이미 보낸 기사는 재전송하지 않음. 같은 종목의 새 기사가 오면 연관 기사로만 첨부
 - `briefing.time`: 아침 브리핑 발송 시각 (기본 08:00)
+- `briefing.global_markets`: 브리핑에 표시할 해외 지수 이름과 Yahoo Finance 심볼
+- `briefing.global_futures`: 브리핑에 표시할 미국 지수 선물 이름과 Yahoo Finance 심볼
+- `briefing.global_market_timeout_sec`: 해외 지수 개별 조회 제한 시간 (기본 10초)
 - `watchlist`: 브리핑에 시세를 포함할 종목코드
 
 ## 구조
@@ -86,4 +89,5 @@ stock_catalyst/
     dart.py                # DART 공시 수집
     rss_news.py            # 언론사 RSS 뉴스 수집 (키워드 필터)
     kis.py                 # KIS 시세 조회 (토큰 캐시 포함)
+    global_markets.py      # 해외 주요 지수 최근 종가 조회
 ```
