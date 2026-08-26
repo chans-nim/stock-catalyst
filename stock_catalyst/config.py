@@ -20,8 +20,6 @@ def _load_yaml() -> dict:
 CFG = _load_yaml()
 
 DART_API_KEY = os.getenv("DART_API_KEY", "")
-NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID", "")
-NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
 KIS_APP_KEY = os.getenv("KIS_APP_KEY", "")
 KIS_APP_SECRET = os.getenv("KIS_APP_SECRET", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

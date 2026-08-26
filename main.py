@@ -1,8 +1,10 @@
 """stock-catalyst CLI.
 
 사용법:
-  python main.py collect   # 1회 수집 + 분석 + 중요 재료 텔레그램 알림
+  python main.py           # 기본: 10분 주기 상시 실행 (watch)
   python main.py watch     # 상시 실행: 주기 수집 + 실시간 알림 + 아침 브리핑 자동 발송
+  python main.py collect   # 1회 수집 + 분석 + 리포트/중요 재료 알림
+  python main.py report    # 전체 기사 요약+중요도 리포트 즉시 발송
   python main.py brief     # 아침 브리핑 즉시 생성·발송
   python main.py status    # DB 수집 현황 출력
 """
@@ -12,8 +14,8 @@ import traceback
 from datetime import datetime, date
 
 from stock_catalyst.config import CFG
-from stock_catalyst import db, analysis, notify, briefing
-from stock_catalyst.collectors import dart, naver_news
+from stock_catalyst import db, analysis, notify, briefing, report, cluster
+from stock_catalyst.collectors import dart, rss_news
 
 
 def _log(msg: str) -> None:
@@ -21,9 +23,10 @@ def _log(msg: str) -> None:
 
 
 def collect_once(conn) -> None:
-    """수집 -> 분석 -> 알림 1사이클."""
+    """수집 -> 분석 -> 리포트/알림 1사이클."""
     new_count = 0
-    for name, fetch in (("DART", dart.fetch_today), ("네이버뉴스", naver_news.fetch_keywords)):
+    analyzed_total = 0
+    for name, fetch in (("DART", dart.fetch_today), ("뉴스RSS", rss_news.fetch_feeds)):
         try:
             items = fetch()
             n = db.insert_items(conn, items)
@@ -41,7 +44,32 @@ def collect_once(conn) -> None:
                 break
             if processed == 0:
                 break
+            analyzed_total += processed
             _log(f"분석 완료: {processed}건")
+
+        try:
+            emb = cluster.process_pending(conn)
+            if emb.get("embedded"):
+                _log(f"임베딩/클러스터: {emb['embedded']}건 (bge-m3)")
+        except Exception as e:
+            _log(f"임베딩/클러스터 실패: {e}")
+
+    # 신규 분석이 없어도 미임베딩 잔여분 처리
+    elif CFG.get("embedding", {}).get("enabled", True):
+        try:
+            emb = cluster.process_pending(conn)
+            if emb.get("embedded"):
+                _log(f"임베딩/클러스터: {emb['embedded']}건 (bge-m3)")
+        except Exception as e:
+            _log(f"임베딩/클러스터 실패: {e}")
+
+    # 신규 분석 또는 미전송 후보가 있으면 리포트 발송
+    if CFG.get("report", {}).get("after_collect", True):
+        if analyzed_total or report.has_sendable(conn):
+            try:
+                send_report(conn)
+            except Exception as e:
+                _log(f"재료 리포트 발송 실패: {e}")
 
     min_imp = int(CFG["analysis"]["alert_min_importance"])
     alerts = db.pending_alerts(conn, min_imp)
@@ -53,14 +81,29 @@ def collect_once(conn) -> None:
                 sent_ids.append(row["id"])
             except Exception as e:
                 _log(f"알림 발송 실패 (id={row['id']}): {e}")
-        db.mark_alerted(conn, sent_ids)
-        _log(f"실시간 알림 {len(sent_ids)}건 발송")
+        if sent_ids:
+            db.mark_alerted(conn, sent_ids)
+            _log(f"실시간 알림 {len(sent_ids)}건 발송")
+
+
+def send_report(conn) -> None:
+    text, ids = report.build(conn)
+    if not ids:
+        _log("재료 리포트 스킵 (발송 대상 없음)")
+        return
+    notify.send(text)
+    # 발송 성공 후에만 노출 기록 → 실패 시 다음 주기에 재시도
+    db.mark_reported(conn, ids)
+    _log(f"재료 리포트 발송 완료 ({len(ids)}건, 노출 기록)")
 
 
 def send_briefing(conn) -> None:
-    text = briefing.build(conn)
-    notify.send(text)
-    _log("아침 브리핑 발송 완료")
+    try:
+        text = briefing.build(conn)
+        notify.send(text)
+        _log("아침 브리핑 발송 완료")
+    except Exception as e:
+        _log(f"아침 브리핑 발송 실패: {e}")
 
 
 def watch(conn) -> None:
@@ -86,7 +129,19 @@ def status(conn) -> None:
     total = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
     analyzed = conn.execute("SELECT COUNT(*) FROM items WHERE analyzed=1").fetchone()[0]
     alerted = conn.execute("SELECT COUNT(*) FROM items WHERE alerted=1").fetchone()[0]
-    print(f"수집 {total}건 / 분석 {analyzed}건 / 알림 발송 {alerted}건")
+    embedded = conn.execute(
+        "SELECT COUNT(*) FROM items WHERE embedding IS NOT NULL AND embedding != ''"
+    ).fetchone()[0]
+    clusters = conn.execute(
+        "SELECT COUNT(DISTINCT cluster_id) FROM items WHERE cluster_id > 0"
+    ).fetchone()[0]
+    print(f"수집 {total}건 / 분석 {analyzed}건 / 임베딩 {embedded}건 / 클러스터 {clusters}개 / 알림 {alerted}건")
+    print("섹터:")
+    for row in conn.execute(
+        "SELECT sector, COUNT(*) c FROM items WHERE sector != '' GROUP BY sector ORDER BY c DESC LIMIT 12"
+    ):
+        print(f"  {row['sector']}: {row['c']}건")
+    print("테마:")
     for row in conn.execute(
         "SELECT theme, COUNT(*) c FROM items WHERE analyzed=1 GROUP BY theme ORDER BY c DESC LIMIT 10"
     ):
@@ -94,12 +149,14 @@ def status(conn) -> None:
 
 
 def main() -> None:
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "collect"
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "watch"
     conn = db.connect()
     if cmd == "collect":
         collect_once(conn)
     elif cmd == "watch":
         watch(conn)
+    elif cmd == "report":
+        send_report(conn)
     elif cmd == "brief":
         send_briefing(conn)
     elif cmd == "status":
