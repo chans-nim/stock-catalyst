@@ -6,6 +6,7 @@
 - **분석**: 온디바이스 AI(Ollama `qwen2.5:3b`)로 요약·중요도, `bge-m3`로 기사 그룹화·섹터 분류 → SQLite 적재 (OpenAI 전환 가능)
 - **실시간 알림**: 중요도 높은 재료를 텔레그램으로 즉시 푸시
 - **아침 브리핑**: 매일 지정 시각에 해외 주요 지수·미국 지수 선물 + 핵심 재료 + 테마별 동향 + 관심 종목 시세를 텔레그램으로 발송
+- **오늘의 영단어**: 네이버 오늘의 영어 단어 5개를 뜻·발음·영문 예문·해석과 함께 별도 발송하고 단어·예문 음원 링크 제공
 
 ## 설치
 
@@ -46,6 +47,7 @@ python main.py watch     # 상시 실행: 주기 수집 + 실시간 알림 + 아
 python main.py collect   # 1회: 수집 → 분석 → 리포트/중요 재료 알림
 python main.py report    # 전체 기사 요약+중요도 리포트 즉시 발송
 python main.py brief     # 아침 브리핑 즉시 발송
+python main.py words     # 오늘의 영단어 학습 리포트 즉시 발송
 python main.py status    # 수집·분석 현황 확인
 ```
 
@@ -71,6 +73,7 @@ python main.py status    # 수집·분석 현황 확인
 - `briefing.global_futures`: 브리핑에 표시할 미국 지수 선물 이름과 Yahoo Finance 심볼
 - `briefing.global_market_timeout_sec`: 해외 지수 개별 조회 제한 시간 (기본 10초)
 - `watchlist`: 브리핑에 시세를 포함할 종목코드
+- `english_learning`: 영단어 리포트 활성화, 발송 시각, 단어 수, 음원 링크, 조회 제한 시간 설정
 
 ## 구조
 
@@ -85,6 +88,7 @@ stock_catalyst/
   notify.py                # 텔레그램 발송
   report.py                # 전체 기사 요약+중요도 리포트 (종목·클러스터 연관)
   briefing.py              # 아침 브리핑 생성
+  english_learning.py      # 네이버 오늘의 영단어 학습 리포트
   collectors/
     dart.py                # DART 공시 수집
     rss_news.py            # 언론사 RSS 뉴스 수집 (키워드 필터)

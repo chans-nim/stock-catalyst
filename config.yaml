@@ -117,3 +117,12 @@ briefing:
 watchlist:
   - "005930"  # 삼성전자
   - "000660"  # SK하이닉스
+
+# ---- 오늘의 영단어 학습 리포트 (주식 브리핑과 독립 실행) ----
+english_learning:
+  enabled: true
+  time: "08:00"
+  word_limit: 5
+  audio_enabled: true
+  timeout_sec: 15
+  source_url: https://wquiz.dict.naver.com/enkodict/today/words.dict

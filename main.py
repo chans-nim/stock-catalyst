@@ -6,6 +6,7 @@
   python main.py collect   # 1회 수집 + 분석 + 리포트/중요 재료 알림
   python main.py report    # 전체 기사 요약+중요도 리포트 즉시 발송
   python main.py brief     # 아침 브리핑 즉시 생성·발송
+  python main.py words     # 오늘의 영단어 학습 리포트 즉시 생성·발송
   python main.py status    # DB 수집 현황 출력
 """
 import sys
@@ -14,7 +15,7 @@ import traceback
 from datetime import datetime, date
 
 from stock_catalyst.config import CFG
-from stock_catalyst import db, analysis, notify, briefing, report, cluster
+from stock_catalyst import db, analysis, notify, briefing, report, cluster, english_learning
 from stock_catalyst.collectors import dart, rss_news
 
 
@@ -106,11 +107,26 @@ def send_briefing(conn) -> None:
         _log(f"아침 브리핑 발송 실패: {e}")
 
 
+def send_english_report() -> bool:
+    """주식 브리핑과 독립적으로 오늘의 영단어 리포트를 발송한다."""
+    try:
+        notify.send(english_learning.build())
+        _log("오늘의 영단어 리포트 발송 완료")
+        return True
+    except Exception as e:
+        _log(f"오늘의 영단어 리포트 발송 실패: {e}")
+        return False
+
+
 def watch(conn) -> None:
     interval = int(CFG["collect"]["poll_interval_sec"])
     brief_time = str(CFG["briefing"]["time"])  # "HH:MM"
+    english_cfg = CFG.get("english_learning") or {}
+    english_enabled = bool(english_cfg.get("enabled", True))
+    english_time = str(english_cfg.get("time", brief_time))
     last_brief_date: date | None = None
-    _log(f"감시 시작 (주기 {interval}초, 브리핑 {brief_time})")
+    last_english_date: date | None = None
+    _log(f"감시 시작 (주기 {interval}초, 브리핑 {brief_time}, 영단어 {english_time})")
 
     while True:
         try:
@@ -120,6 +136,13 @@ def watch(conn) -> None:
             if now.strftime("%H:%M") >= brief_time and last_brief_date != now.date():
                 send_briefing(conn)
                 last_brief_date = now.date()
+            if (
+                english_enabled
+                and now.strftime("%H:%M") >= english_time
+                and last_english_date != now.date()
+                and send_english_report()
+            ):
+                last_english_date = now.date()
         except Exception:
             traceback.print_exc()
         time.sleep(interval)
@@ -150,6 +173,11 @@ def status(conn) -> None:
 
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "watch"
+    # 영단어 리포트는 DB를 포함한 주식 모듈 실행 상태와 무관하게 동작한다.
+    if cmd == "words":
+        send_english_report()
+        return
+
     conn = db.connect()
     if cmd == "collect":
         collect_once(conn)
